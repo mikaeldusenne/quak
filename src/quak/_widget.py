@@ -53,7 +53,12 @@ class Widget(anywidget.AnyWidget):
                 # be better to keep this Arrow stream non-materalized in Python and
                 # create a new DuckDB table from the stream.
                 # arrow_table = pa.RecordBatchReader.from_stream(data)
-                arrow_table = pa.table(data)
+                try:
+                    arrow_table = pa.table(data)
+                except pa.ArrowException:
+                    if not is_dataframe_api_obj(data):
+                        raise
+                    arrow_table = arrow_table_from_dataframe_protocol(data)
             elif is_arrow_ipc(data):
                 arrow_table = arrow_table_from_ipc(data)
             elif is_dataframe_api_obj(data):
