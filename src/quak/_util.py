@@ -58,7 +58,26 @@ def arrow_table_from_dataframe_protocol(dflike: DataFrameObject) -> pa.lib.Table
             if isinstance(result, pa.Table):
                 return result
 
-    return pi.from_dataframe(dflike)  # type: ignore[no-any-return]
+    try:
+        return pi.from_dataframe(dflike)  # type: ignore[no-any-return]
+    except (pa.ArrowException, NotImplementedError):
+        pandas = sys.modules.get("pandas")
+        if pandas is None or not isinstance(dflike, pandas.DataFrame):
+            raise
+        normalized = dflike.copy()
+        converted = False
+        for position, dtype in enumerate(dflike.dtypes):
+            if dtype != object:
+                continue
+            values = dflike.iloc[:, position]
+            try:
+                pa.array(values, from_pandas=True)
+            except (pa.ArrowException, NotImplementedError):
+                normalized.isetitem(position, values.astype("string"))
+                converted = True
+        if not converted:
+            raise
+        return pi.from_dataframe(normalized)  # type: ignore[no-any-return]
 
 
 def arrow_table_from_ipc(data: bytes | memoryview) -> pa.lib.Table:
